@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from .models import Node, Effects, TeamNode, Map
+from .models import Node, Effects, TeamNode, Map, MapObject, ObjectAssetKey
 from users.models import Team, NodeStatus
 from .services import (
     process_submit,
@@ -24,6 +24,10 @@ from .serializers import (
     TargetTeamsResponseSerializer,
     TargetAttackSerializer,
     MapListSerializer,
+    MapSerializer,
+    MapObjectSerializer,
+    MapObjectCreateSerializer,
+    MapObjectUpdateSerializer,
     MapGraphResponseSerializer,
     MapSkeletonResponseSerializer,
     EstablishRelationRequestSerializer,
@@ -408,7 +412,7 @@ class MapViewSet(viewsets.ViewSet):
     Django MPTT represents the tree hierarchy, while alt_parent and alt_child connect cycles at junction nodes.
     """
     permission_classes = [AllowAny]
-    http_method_names = ['get', 'post', 'delete']
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete']
 
     @extend_schema(
         summary="List Maps",
@@ -436,7 +440,7 @@ class MapViewSet(viewsets.ViewSet):
         except Map.DoesNotExist:
             return Response({'detail': f'Map with id {pk} does not exist.'}, status=404)
 
-        nodes = Node.objects.filter(map=map_obj).order_by('tree_id', 'lft')
+        nodes = Node.objects.filter(map=map_obj)
         node_map = {n.id: n for n in nodes}
 
         # Build children map from MPTT parent relation
@@ -512,6 +516,7 @@ class MapViewSet(viewsets.ViewSet):
         response_data = {
             "nodes": nodes_payload,
             "edges": edges_payload,
+            "objects": map_obj.map_objects.all(),
             "total_nodes": len(nodes_payload),
             "total_edges": len(edges_payload),
             "team_state": team_state,
@@ -559,6 +564,7 @@ class MapViewSet(viewsets.ViewSet):
         response_data = {
             "nodes": nodes_payload,
             "edges": edges_payload,
+            "objects": map_obj.map_objects.all(),
             "total_nodes": len(nodes_payload),
             "total_edges": len(edges_payload),
         }
@@ -622,3 +628,52 @@ class MapViewSet(viewsets.ViewSet):
             },
             status=200,
         )
+
+    @extend_schema(
+        summary="Get Objects of a Map",
+        description="Returns all visual styling objects belonging to the specified Map ID.",
+        responses={200: MapObjectSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'], url_path='objects')
+    def objects(self, request, pk=None, *args, **kwargs):
+        try:
+            map_obj = Map.objects.get(pk=pk)
+        except Map.DoesNotExist:
+            return Response({'detail': f'Map with id {pk} does not exist.'}, status=404)
+
+        objs = map_obj.map_objects.all()
+        return Response(MapObjectSerializer(objs, many=True).data)
+
+@extend_schema(tags=['Map Objects'])
+class MapObjectViewSet(viewsets.ModelViewSet):
+    queryset = MapObject.objects.all().order_by('z_index', 'created_at')
+    permission_classes = [AllowAny]
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete']
+
+    def get_serializer_class(self):
+        if self.action in ['create']:
+            return MapObjectCreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return MapObjectUpdateSerializer
+        return MapObjectSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        map_id = self.request.query_params.get('map')
+        if map_id:
+            queryset = queryset.filter(map_id=map_id)
+        return queryset
+
+    @extend_schema(
+        summary="List Object Asset Keys",
+        description="Returns all supported object asset keys and their labels for frontend dropdowns.",
+    )
+    @action(detail=False, methods=['get'], url_path='asset-keys')
+    def asset_keys(self, request, *args, **kwargs):
+        assets = [
+            {"key": choice.value, "label": choice.label}
+            for choice in ObjectAssetKey
+        ]
+        return Response(assets)
+
+

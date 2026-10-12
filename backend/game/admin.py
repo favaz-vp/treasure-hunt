@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.template.response import TemplateResponse
 from django.urls import path
-from .models import Map, Node, GameSession, TeamNode, GameHistory
+from .models import Map, Node, GameSession, TeamNode, GameHistory, MapObject
 from users.node_graph import render_node_graph_svg
 
 
@@ -13,16 +13,34 @@ class NodeInline(admin.TabularInline):
     show_change_link = True
 
 
+class MapObjectInline(admin.TabularInline):
+    model = MapObject
+    extra = 0
+    fields = ('asset_key', 'x', 'y', 'scale', 'rotation', 'z_index')
+
+
 @admin.register(Map)
 class MapAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'is_active', 'nodes_count', 'created_at')
+    list_display = ('id', 'name', 'is_active', 'objects_count', 'nodes_count', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('name', 'description')
-    inlines = (NodeInline,)
+    inlines = (NodeInline, MapObjectInline)
 
     def nodes_count(self, obj):
         return obj.nodes.count()
     nodes_count.short_description = "Total Nodes"
+
+    def objects_count(self, obj):
+        return obj.map_objects.count()
+    objects_count.short_description = "Total Objects"
+
+
+@admin.register(MapObject)
+class MapObjectAdmin(admin.ModelAdmin):
+    list_display = ('id', 'map', 'asset_key', 'x', 'y', 'scale', 'rotation', 'z_index', 'created_at')
+    list_filter = ('map', 'asset_key')
+    search_fields = ('map__name', 'asset_key')
+    ordering = ('map', 'z_index', 'created_at')
 
 
 @admin.register(Node)

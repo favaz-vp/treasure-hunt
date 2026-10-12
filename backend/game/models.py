@@ -7,6 +7,25 @@ class Effects(models.TextChoices):
     UNLOCKED = 'UNLOCKED', 'Unlocked'
 
 
+class ObjectAssetKey(models.TextChoices):
+    COCONUT_TREE = 'coconut_tree', 'Coconut Tree'
+    PALM_TREE = 'palm_tree', 'Palm Tree'
+    TREE = 'tree', 'Tree'
+
+    BUSH = 'bush', 'Bush'
+    FLOWER_BUSH = 'flower_bush', 'Flower Bush'
+
+    ROCK = 'rock', 'Rock'
+    MOSSY_ROCK = 'mossy_rock', 'Mossy Rock'
+
+    HUT = 'hut', 'Hut'
+    BOAT = 'boat', 'Boat'
+    CHEST = 'chest', 'Treasure Chest'
+
+
+DecorationAssetKey = ObjectAssetKey
+
+
 class Map(models.Model):
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True, default="")
@@ -16,6 +35,24 @@ class Map(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class MapObject(models.Model):
+    map = models.ForeignKey(Map, on_delete=models.CASCADE, related_name='map_objects')
+    asset_key = models.CharField(max_length=50, choices=ObjectAssetKey.choices)
+    x = models.FloatField()
+    y = models.FloatField()
+    scale = models.FloatField(default=1.0)
+    rotation = models.FloatField(default=0.0)
+    z_index = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['z_index', 'created_at']
+
+    def __str__(self):
+        return f"{self.asset_key} ({self.id}) on {self.map.name}"
 
 
 class Node(MPTTModel):
