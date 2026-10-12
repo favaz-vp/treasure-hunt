@@ -1,5 +1,6 @@
+import uuid
 from rest_framework import serializers
-from .models import Map, Node, GameSession, TeamNode, GameHistory, Effects
+from .models import Map, Node, GameSession, TeamNode, GameHistory, Effects, MapObject, ObjectAssetKey, DecorationAssetKey
 from users.models import Team, NodeStatus
 
 
@@ -126,18 +127,50 @@ class NodeSerializer(serializers.ModelSerializer):
 
 class MapListSerializer(serializers.ModelSerializer):
     nodes_count = serializers.IntegerField(source='nodes.count', read_only=True)
+    objects_count = serializers.IntegerField(source='map_objects.count', read_only=True)
 
     class Meta:
         model = Map
-        fields = ['id', 'name', 'description', 'is_active', 'nodes_count', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'is_active', 'objects_count', 'nodes_count', 'created_at', 'updated_at']
 
+
+class MapObjectSerializer(serializers.ModelSerializer):
+    asset_key = serializers.ChoiceField(
+        choices=ObjectAssetKey.choices,
+        required=True,
+        error_messages={
+            "required": "asset_key is required.",
+            "invalid_choice": '"{input}" is not a valid asset_key. Valid choices are: ' + ', '.join(k for k, _ in ObjectAssetKey.choices),
+        },
+    )
+
+    class Meta:
+        model = MapObject
+        fields = ['id', 'map', 'asset_key', 'x', 'y', 'scale', 'rotation', 'z_index', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class MapObjectUpdateSerializer(serializers.ModelSerializer):
+    scale = serializers.FloatField(default=1.0, required=False, min_value=0.01)
+
+    class Meta:
+        model = MapObject
+        fields = ['id', 'asset_key', 'x', 'y', 'scale', 'rotation', 'z_index']
+        read_only_fields = ['id']
+
+class MapObjectCreateSerializer(MapObjectUpdateSerializer):
+    class Meta:
+        model = MapObject
+        fields = MapObjectUpdateSerializer.Meta.fields + ['map']
+        read_only_fields = ['id']
 
 class MapSerializer(serializers.ModelSerializer):
     nodes = NodeSerializer(many=True, read_only=True)
+    objects = MapObjectSerializer(source='map_objects', many=True, read_only=True)
 
     class Meta:
         model = Map
-        fields = ['id', 'name', 'description', 'is_active', 'nodes', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'is_active', 'objects', 'nodes', 'created_at', 'updated_at']
 
 
 class GameSessionSerializer(serializers.ModelSerializer):
@@ -250,6 +283,7 @@ class MapSkeletonNodeSerializer(serializers.Serializer):
 class MapSkeletonResponseSerializer(serializers.Serializer):
     nodes = MapSkeletonNodeSerializer(many=True)
     edges = MapEdgeSerializer(many=True)
+    objects = MapObjectSerializer(many=True, default=list)
     total_nodes = serializers.IntegerField()
     total_edges = serializers.IntegerField()
 
@@ -257,6 +291,7 @@ class MapSkeletonResponseSerializer(serializers.Serializer):
 class MapGraphResponseSerializer(serializers.Serializer):
     nodes = MapNodeSerializer(many=True)
     edges = MapEdgeSerializer(many=True)
+    objects = MapObjectSerializer(many=True, default=list)
     total_nodes = serializers.IntegerField()
     total_edges = serializers.IntegerField()
     team_state = MapTeamStateSerializer(allow_null=True)
