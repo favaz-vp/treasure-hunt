@@ -2,9 +2,8 @@ from django.contrib import admin
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Team, Node, TeamNode, GameHistory
+from .models import User, Team
 from .sse import publish
-from .node_graph import render_node_graph_svg
 
 
 class UserAdmin(BaseUserAdmin):
@@ -13,7 +12,7 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ('email',)
     ordering = ('email',)
     fieldsets = (
-    (None, {"fields": ("email", "password")}),
+    (None, {"fields": ("email", "password", "team")}),
     ("Personal info", {"fields": ("first_name", "last_name")}),
     ("Permissions", {
         "fields": (
@@ -74,54 +73,5 @@ class TeamAdmin(admin.ModelAdmin):
             if obj.pk and self.STREAMED_FIELDS.intersection(changed_form.changed_data):
                 self._publish_stats(obj)
 
-class NodeAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "data",
-        "next_node_id",
-        "alt_next_node_id",
-        "effects",
-        "clue",
-        "score",
-        "bonus",
-        "life",
-        "attack",
-        "answer",
-    )
-    search_fields = ('data',)
-    ordering = ('created_at',)
-    change_list_template = "admin/users/node/change_list.html"
-
-    def get_urls(self):
-        urls = [
-            path('graph/', self.admin_site.admin_view(self.graph_view), name='users_node_graph'),
-        ]
-        return urls + super().get_urls()
-
-    def graph_view(self, request):
-        svg, width, height = render_node_graph_svg(self.get_queryset(request))
-        context = {
-            **self.admin_site.each_context(request),
-            'title': 'Node graph',
-            'svg': svg,
-            'svg_width': width,
-            'svg_height': height,
-            'opts': self.model._meta,
-        }
-        return TemplateResponse(request, 'admin/users/node/graph.html', context)
-
-class TeamNodeAdmin(admin.ModelAdmin):
-    list_display = ('team', 'node', 'created_at')
-    search_fields = ('team__name', 'node__data')
-    ordering = ('created_at',)
-
-class GameHistoryAdmin(admin.ModelAdmin):
-    list_display = ('team', 'node', 'action', 'created_at')
-    search_fields = ('team__name', 'node__data')
-    ordering = ('created_at',)
-
 admin.site.register(User, UserAdmin)
 admin.site.register(Team, TeamAdmin)
-admin.site.register(Node, NodeAdmin)
-admin.site.register(TeamNode, TeamNodeAdmin)
-admin.site.register(GameHistory, GameHistoryAdmin)
